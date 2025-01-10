@@ -1,24 +1,20 @@
-//This is the Cat and Dog image classifier. I could just link the Google Collab project but i prefer to just copy paste the code here and make the necessary adjustments.
-//
 
-#1
-try:
-    #This command only in Colab.
-    %tensorflow_version 2.x
+  # This command only in Colab.
+#%tensorflow_version 2.x
+
 except Exception:
-    pass
+  pass
 import tensorflow as tf
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, conv2D, Flatten, Dropout, Maxpooling2D
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-import os 
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-
-#2 - Get project files
+# Get project files
 !wget https://cdn.freecodecamp.org/project-data/cats-and-dogs/cats_and_dogs.zip
 
 !unzip cats_and_dogs.zip
@@ -41,35 +37,22 @@ epochs = 15
 IMG_HEIGHT = 150
 IMG_WIDTH = 150
 
+#3
 
-# 3 - Create ImageDataGenerators to rescale the images
-train_image_generator = ImageDataGenerator(rescale=1./255)  # Rescale train images
-validation_image_generator = ImageDataGenerator(rescale=1./255)  # Rescale validation images
-test_image_generator = ImageDataGenerator(rescale=1./255)  # Rescale test images
+train_image_generator = ImageDataGenerator(rescale=1./255)
+validation_image_generator = ImageDataGenerator(rescale=1./255)
+test_image_generator = ImageDataGenerator(rescale=1./255)
 
-# Flow from directory for each dataset
-train_data_gen = train_image_generator.flow_from_directory(
-    directory=train_dir,  # Path to training data
-    batch_size=batch_size,
-    target_size=(IMG_HEIGHT, IMG_WIDTH),  # Resize to 150x150
-    class_mode='binary'  # Binary classification (cat vs dog)
-)
-
-val_data_gen = validation_image_generator.flow_from_directory(
-    directory=validation_dir,  # Path to validation data
-    batch_size=batch_size,
-    target_size=(IMG_HEIGHT, IMG_WIDTH),  # Resize to 150x150
-    class_mode='binary'  # Binary classification
-)
-
-test_data_gen = test_image_generator.flow_from_directory(
-    directory=test_dir,  # Path to test data
-    batch_size=batch_size,
-    target_size=(IMG_HEIGHT, IMG_WIDTH),  # Resize to 150x150
-    class_mode=None,  # No labels for test data
-    shuffle=False  # Ensure test images stay in the same order
-)
-
+train_data_gen = train_image_generator.flow_from_directory(batch_size=batch_size,
+                                                           directory=train_dir,
+                                                           target_size=((IMG_HEIGHT,IMG_WIDTH)),class_mode="binary")
+val_data_gen = validation_image_generator.flow_from_directory(batch_size=batch_size,
+                                                              directory=validation_dir,
+                                                              target_size=((IMG_HEIGHT,IMG_WIDTH)),class_mode="binary")
+test_data_gen = test_image_generator.flow_from_directory(shuffle=False,classes = ['test'],
+                                                         batch_size=batch_size,
+                                                         directory=PATH,
+                                                         target_size=((IMG_HEIGHT,IMG_WIDTH)),class_mode="binary")
 
 # 4
 def plotImages(images_arr, probabilities = False):
@@ -91,17 +74,14 @@ def plotImages(images_arr, probabilities = False):
 sample_training_images, _ = next(train_data_gen)
 plotImages(sample_training_images[:5])
 
-
 # 5 - Data Augmentation for Training Set
-train_image_generator = ImageDataGenerator(
-    rescale=1./255,                # Normalize pixel values to [0,1]
-    rotation_range=40,             # Randomly rotate images by up to 40 degrees
-    width_shift_range=0.2,         # Shift image horizontally by up to 20% of width
-    height_shift_range=0.2,        # Shift image vertically by up to 20% of height
-    shear_range=0.2,               # Shear (distort) image by up to 20%
-    zoom_range=0.2,                # Zoom in/out by up to 20%
-    horizontal_flip=True           # Randomly flip images horizontally
-)
+train_image_generator = ImageDataGenerator(rescale=1./255,
+rotation_range=40,
+width_shift_range=0.2,
+height_shift_range=0.2,
+shear_range=0.2,
+horizontal_flip=True,
+fill_mode='nearest' )
 
 # 6
 train_data_gen = train_image_generator.flow_from_directory(batch_size=batch_size,
@@ -113,57 +93,34 @@ augmented_images = [train_data_gen[0][0][0] for i in range(5)]
 
 plotImages(augmented_images)
 
-
-
-
 # 7 - Build the CNN Model
 model = Sequential()
-
-# Convolutional Base (Feature Extraction)
-model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_HEIGHT, IMG_WIDTH, 3)))  # 32 filters, 3x3 kernel
-model.add(MaxPooling2D(pool_size=(2, 2)))  # Reduces dimensions by half
-
-model.add(Conv2D(64, (3, 3), activation='relu'))  # 64 filters, deeper layer
-model.add(MaxPooling2D(pool_size=(2, 2))) 
-
-model.add(Conv2D(128, (3, 3), activation='relu'))  # Deeper layer with 128 filters
+model.add(Conv2D(32, (3, 3), activation='relu', input_shape=(150,150,3)))
+model.add(MaxPooling2D(pool_size=(2,2)))
+model.add(Conv2D(64, (3, 3), activation='relu'))
 model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(64, (3, 3), activation='relu'))
+model.add(Flatten())
+model.add(Dense(64, activation="relu"))
+model.add(Dense(2))
 
-model.add(Flatten())  # Flatten the feature maps
+model.compile(optimizer="adam",loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=["accuracy"])
 
-# Fully Connected Layers (Classification)
-model.add(Dense(512, activation='relu'))  # Dense layer with 512 neurons
-model.add(Dropout(0.5))  # Dropout to reduce overfitting
-model.add(Dense(1, activation='sigmoid'))  # Binary output (cat or dog)
-
-# Compile the Model
-model.compile(optimizer='adam',
-              loss='binary_crossentropy',
-              metrics=['accuracy'])
-
-# Model Summary (Shows the architecture)
 model.summary()
 
+history = model.fit(x=train_data_gen,
+                    epochs=epochs,
+                    steps_per_epoch=total_train // batch_size,
+                    validation_steps=total_val // batch_size,
+                    validation_data=val_data_gen)
 
-
-# 8 - Train the model using the fit method
-history = model.fit(
-    train_data_gen,                     # The training data generator
-    steps_per_epoch=total_train // batch_size,  # Number of batches per epoch (training samples / batch size)
-    epochs=epochs,                      # Number of epochs
-    validation_data=val_data_gen,        # Validation data generator
-    validation_steps=total_val // batch_size  # Number of batches for validation data
-)
-
-
-# 9
 acc = history.history['accuracy']
 val_acc = history.history['val_accuracy']
 
 loss = history.history['loss']
 val_loss = history.history['val_loss']
 
-epochs_range = range(epochs)
+epochs_range = range(len(acc))  # Use actual length of training history
 
 plt.figure(figsize=(8, 8))
 plt.subplot(1, 2, 1)
@@ -179,14 +136,15 @@ plt.legend(loc='upper right')
 plt.title('Training and Validation Loss')
 plt.show()
 
-# 10 - Predict and visualize test images
-if len(test_data_gen) > 0:
-    probabilities = model.predict(test_data_gen)
-    sample_test_images = test_data_gen[0]  # Fetch first batch
-    plotImages(sample_test_images, probabilities)
-else:
-    print("No images found in test directory!")
+# Predict and visualize test images
+images, _ = next(test_data_gen)
+probabilities = np.argmax(model.predict(test_data_gen), axis=-1)
+plotImages(images, probabilities=probabilities)
 
+print(f"Training Accuracy: {len(acc)}")
+print(f"Validation Accuracy: {len(val_acc)}")
+print(f"Training Loss: {len(loss)}")
+print(f"Validation Loss: {len(val_loss)}")
 
 # 11
 answers =  [1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0,
@@ -211,6 +169,3 @@ if passed_challenge:
   print("You passed the challenge!")
 else:
   print("You haven't passed yet. Your model should identify at least 63% of the images. Keep trying. You will get it!")
-
-
-
